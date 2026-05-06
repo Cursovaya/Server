@@ -6,7 +6,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-DB_PATH = 'ldpr_edo.db'
+DB_PATH = os.path.join(os.path.dirname(__file__), 'ldpr_edo.db')
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -63,22 +63,20 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     ''')
-    cur.execute("SELECT id FROM users WHERE login='admin'")
-    if not cur.fetchone():
-        cur.execute("INSERT INTO users (full_name, login, password, role) VALUES (?,?,?,?)",
-                    ('Администратор', 'admin', 'admin123', 'admin'))
-    cur.execute("SELECT id FROM users WHERE login='assistant'")
-    if not cur.fetchone():
-        cur.execute("INSERT INTO users (full_name, login, password, role) VALUES (?,?,?,?)",
-                    ('Помощник', 'assistant', '123', 'assistant'))
-    cur.execute("SELECT id FROM users WHERE login='head_central'")
-    if not cur.fetchone():
-        cur.execute("INSERT INTO users (full_name, login, password, role) VALUES (?,?,?,?)",
-                    ('Руководитель ЦА', 'head_central', '123', 'head_central'))
-    cur.execute("SELECT id FROM users WHERE login='secretary'")
-    if not cur.fetchone():
-        cur.execute("INSERT INTO users (full_name, login, password, role) VALUES (?,?,?,?)",
-                    ('Секретариат ЦА', 'secretary', '123', 'secretary'))
+    
+    # Создаём тестовых пользователей, если их нет
+    users = [
+        ('Администратор', 'admin', 'admin123', 'admin'),
+        ('Помощник', 'assistant', '123', 'assistant'),
+        ('Руководитель ЦА', 'head_central', '123', 'head_central'),
+        ('Секретариат ЦА', 'secretary', '123', 'secretary')
+    ]
+    for full_name, login, password, role in users:
+        cur.execute("SELECT id FROM users WHERE login=?", (login,))
+        if not cur.fetchone():
+            cur.execute("INSERT INTO users (full_name, login, password, role) VALUES (?,?,?,?)",
+                        (full_name, login, password, role))
+    
     conn.commit()
     conn.close()
 
@@ -111,8 +109,7 @@ def execute_sql():
     except Exception as e:
         conn.rollback()
         conn.close()
-        # Абсолютно никакого вывода — даже ошибки не пишем
-        return jsonify({'error': 'Database error', 'success': False}), 500
+        return jsonify({'error': str(e), 'success': False}), 500
 
 @app.route('/api/upload_files', methods=['POST'])
 def upload_files():
@@ -153,5 +150,4 @@ def download_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 if __name__ == '__main__':
-    # debug=False — отключает вывод Flask в консоль
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=10000, debug=False)
