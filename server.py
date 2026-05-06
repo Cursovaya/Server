@@ -11,8 +11,11 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def init_db():
+    print(f"[INIT] Создание/проверка БД по пути: {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+    
+    # Создаём таблицы
     cur.executescript('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,22 +67,36 @@ def init_db():
         );
     ''')
     
-    # Создаём тестовых пользователей, если их нет
-    users = [
+    # Добавляем тестовых пользователей, если их нет
+    test_users = [
         ('Администратор', 'admin', 'admin123', 'admin'),
         ('Помощник', 'assistant', '123', 'assistant'),
         ('Руководитель ЦА', 'head_central', '123', 'head_central'),
         ('Секретариат ЦА', 'secretary', '123', 'secretary')
     ]
-    for full_name, login, password, role in users:
+    
+    for full_name, login, password, role in test_users:
         cur.execute("SELECT id FROM users WHERE login=?", (login,))
         if not cur.fetchone():
             cur.execute("INSERT INTO users (full_name, login, password, role) VALUES (?,?,?,?)",
                         (full_name, login, password, role))
+            print(f"[INIT] Добавлен пользователь: {login}")
+        else:
+            print(f"[INIT] Пользователь уже существует: {login}")
     
     conn.commit()
+    
+    # Проверяем, сколько пользователей в БД
+    cur.execute("SELECT COUNT(*) FROM users")
+    count = cur.fetchone()[0]
+    print(f"[INIT] Всего пользователей в БД: {count}")
+    
     conn.close()
+    print(f"[INIT] Инициализация завершена")
 
+# Запускаем инициализацию БД
+print(f"[START] Путь к БД: {DB_PATH}")
+print(f"[START] Файл БД существует: {os.path.exists(DB_PATH)}")
 init_db()
 
 @app.route('/api/execute', methods=['POST'])
@@ -90,6 +107,10 @@ def execute_sql():
     commit = data.get('commit', False)
     fetch = data.get('fetch', False)
 
+    print(f"[SQL] Запрос: {query}")
+    print(f"[SQL] Параметры: {params}")
+    print(f"[SQL] commit={commit}, fetch={fetch}")
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -98,9 +119,11 @@ def execute_sql():
         if commit:
             conn.commit()
             result = cur.lastrowid
+            print(f"[SQL] Результат INSERT: {result}")
         elif fetch:
             rows = cur.fetchall()
             result = [list(row) for row in rows]
+            print(f"[SQL] Найдено строк: {len(result)}")
         else:
             result = None
         cur.close()
@@ -109,6 +132,7 @@ def execute_sql():
     except Exception as e:
         conn.rollback()
         conn.close()
+        print(f"[SQL] ОШИБКА: {str(e)}")
         return jsonify({'error': str(e), 'success': False}), 500
 
 @app.route('/api/upload_files', methods=['POST'])
